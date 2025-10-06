@@ -68,7 +68,7 @@ class RecommendationDashboard:
                     data = message.value
                     topic = message.topic
                     
-                    if topic == 'user_clicks':
+                    if topic == 'user_events':
                         self._process_click_event(data)
                     elif topic == 'recommendations':
                         self._process_recommendation(data)
@@ -573,7 +573,7 @@ def main():
     
     # Configuration
     kafka_servers = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092').split(',')
-    kafka_topics = ['user_clicks', 'recommendations']
+    kafka_topics = ['user_events', 'recommendations']
     redis_host = os.getenv('REDIS_HOST', 'localhost')
     redis_port = int(os.getenv('REDIS_PORT', 6379))
     

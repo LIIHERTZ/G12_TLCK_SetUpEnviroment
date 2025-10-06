@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class ClickEventGenerator:
-    def __init__(self, bootstrap_servers='localhost:9092', topic='user_clicks'):
+    def __init__(self, bootstrap_servers='localhost:9092', topic='user_events'):
         """Khởi tạo producer với cấu hình Kafka"""
         self.topic = topic
         self.producer = KafkaProducer(
@@ -213,7 +213,7 @@ def main():
     """Main function"""
     # Lấy cấu hình từ environment variables
     kafka_servers = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
-    topic = os.getenv('KAFKA_TOPIC', 'user_clicks')
+    topic = os.getenv('KAFKA_TOPIC', 'user_events')
     events_per_second = int(os.getenv('EVENTS_PER_SECOND', 5))
     
     logger.info(f"Configuration:")

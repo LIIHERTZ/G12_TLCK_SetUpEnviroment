@@ -75,7 +75,9 @@ services:
 
   # ============ SPARK MASTER ============
   spark-master:
-    image: apache/spark:3.5.0
+    build:
+      context: ./spark-apps
+      dockerfile: Dockerfile
     container_name: G12-rec-spark-master
     hostname: spark-master
     networks:
@@ -90,7 +92,6 @@ services:
       - "7077:7077"  # Spark Master Port
       - "4040:4040"  # Spark Application UI
     volumes:
-      - ./spark-apps:/opt/spark-apps
       - ./data:/opt/spark/work-dir
     command: >
       bash -c "
@@ -107,7 +108,9 @@ services:
 
   # ============ SPARK WORKER ============
   spark-worker:
-    image: apache/spark:3.5.0
+    build:
+      context: ./spark-apps
+      dockerfile: Dockerfile
     container_name: G12-rec-spark-worker
     hostname: spark-worker
     networks:
@@ -118,7 +121,6 @@ services:
     ports:
       - "8081:8081"  # Spark Worker UI
     volumes:
-      - ./spark-apps:/opt/spark-apps
       - ./data:/opt/spark/work-dir
     command: >
       bash -c "

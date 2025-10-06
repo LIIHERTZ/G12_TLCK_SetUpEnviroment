@@ -45,7 +45,7 @@ class RecommendationEngine:
 def create_kafka_consumer():
     """Tạo Kafka consumer"""
     return KafkaConsumer(
-        'user_clicks',
+        'user_events',
         bootstrap_servers=['kafka:9092'],
         group_id='spark_recommendation_group',
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
@@ -76,7 +76,7 @@ def main():
     
     try:
         logger.info("✅ Spark-style Recommendation system started successfully!")
-        logger.info("📥 Listening for click events on Kafka topic 'user_clicks'")
+        logger.info("📥 Listening for click events on Kafka topic 'user_events'")
         logger.info("📤 Sending recommendations to Kafka topic 'recommendations'")
         
         # Xử lý streaming events (giống như Spark Streaming)

@@ -134,9 +134,9 @@ Apache Spark là một unified analytics engine (công cụ phân tích thống 
 │ - wishlist      │    │ └─────────────────┘ │    │ │  (Executors)    │ │    │ └─────────────┘ │
 └─────────────────┘    └─────────────────────┘    │ └─────────────────┘ │    │                 │
          │                       │                │                     │    │ ┌─────────────┐ │
-         │              ┌────────┘                └─────────────────────┘    │ │ Product     │ │
-         │              │                                  │                 │ │ Metadata    │ │
-         ▼              ▼                                  ▼                 │ └─────────────┘ │
+         │                       |                └─────────────────────┘    │ │ Product     │ │
+         │                       │                         │                 │ │ Metadata    │ │
+         ▼                       ▼                         ▼                 │ └─────────────┘ │
 ┌─────────────────────────────────────────────────────────────────────────┐  └─────────────────┘
 │                           MODEL LOADER                                  │          │
 │                                                                         │          │
@@ -175,63 +175,63 @@ LUỒNG DỮ LIỆU CHI TIẾT:
 
 ## Hướng dẫn Chạy Hệ thống từ Build đến Giao diện
 
+### Bước 1: Dọn dẹp và Khởi động Infrastructure
 
-### Bước 1: Build và Khởi động Infrastructure
-
-**Build tất cả services:**
+**Dọn dẹp hệ thống cũ (nếu có):**
 ```bash
+# Dừng tất cả containers
+docker-compose down
+
+# Xóa volumes để tránh xung đột (nếu cần)
+docker-compose down -v
+```
+
+**Build và khởi động infrastructure services:**
+```bash
+# Build tất cả services
 docker-compose build
+
+# Khởi động infrastructure services
+docker-compose up -d zookeeper kafka redis spark-master spark-worker model-loader
 ```
 
-**Khởi động infrastructure services:**
-```bash
-docker-compose up -d kafka redis spark-master spark-worker
-```
-
-**Verify services đang chạy:**
-```bash
-docker-compose ps
-```
-
-### Bước 2: Load Machine Learning Models
-
-**Chạy model-loader:**
-```bash
-docker-compose run --rm model-loader
-```
-
-**Kiểm tra models đã được load vào Redis:**
-```bash
-docker exec -it G12-rec-redis redis-cli KEYS "*" | head -10
-```
-
-### Bước 3: Khởi động Data Pipeline
+### Bước 2: Khởi động Data Pipeline
 
 **Start Producer (Event Generator):**
 ```bash
+# Khởi động producer để tạo user events
 docker-compose up -d producer
+
+# Kiểm tra log producer
+docker-compose logs -f producer
 ```
 
 **Start Spark Recommendation Engine:**
 ```bash
-docker-compose exec spark-master python3 /opt/spark-apps/simple_spark_engine.py &
+# Chạy Spark engine trong background
+docker-compose exec -d spark-master python3 /opt/spark-apps/simple_spark_engine.py
 ```
 
-### Bước 4: Khởi động Dashboard Interface
+### Bước 3: Khởi động Dashboard Interface
 
 **Start Consumer Dashboard:**
 ```bash
+# Khởi động dashboard
 docker-compose up -d consumer
+
+# Kiểm tra log dashboard
+docker-compose logs -f consumer
 ```
 
-### Bước 5: Truy cập Giao diện
+### Bước 4: Truy cập Giao diện
 
 **Mở trình duyệt và truy cập:**
 
 1. **Main Dashboard**: http://localhost:5000
    - Real-time recommendations
-   - System metrics
+   - System metrics  
    - User activity monitoring
+   - Product analytics
 
 2. **Spark Master UI**: http://localhost:8080
    - Cluster status
