@@ -1,0 +1,210 @@
+version: "3.8"
+
+services:
+  # ============ ZOOKEEPER ============
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: G12-rec-zookeeper
+    hostname: zookeeper
+    networks:
+      - rec-network
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zk_data:/var/lib/zookeeper/data
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo 'ruok' | nc localhost 2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ============ KAFKA ============
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: G12-rec-kafka
+    hostname: kafka
+    networks:
+      - rec-network
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--list", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ============ REDIS ============
+  redis:
+    image: redis:7.0-alpine
+    container_name: G12-rec-redis
+    hostname: redis
+    networks:
+      - rec-network
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============ SPARK MASTER ============
+  spark-master:
+    image: apache/spark:3.5.0
+    container_name: G12-rec-spark-master
+    hostname: spark-master
+    networks:
+      - rec-network
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_DRIVER_MEMORY=1g
+      - SPARK_DRIVER_CORES=1
+    ports:
+      - "8080:8080"  # Spark Master UI
+      - "7077:7077"  # Spark Master Port
+      - "4040:4040"  # Spark Application UI
+    volumes:
+      - ./spark-apps:/opt/spark-apps
+      - ./data:/opt/spark/work-dir
+    command: >
+      bash -c "
+      /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+      --host spark-master
+      --port 7077
+      --webui-port 8080
+      "
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ============ SPARK WORKER ============
+  spark-worker:
+    image: apache/spark:3.5.0
+    container_name: G12-rec-spark-worker
+    hostname: spark-worker
+    networks:
+      - rec-network
+    environment:
+      - SPARK_WORKER_MEMORY=1g
+      - SPARK_WORKER_CORES=1
+    ports:
+      - "8081:8081"  # Spark Worker UI
+    volumes:
+      - ./spark-apps:/opt/spark-apps
+      - ./data:/opt/spark/work-dir
+    command: >
+      bash -c "
+      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+      spark://spark-master:7077
+      --webui-port 8081
+      --memory 1g
+      --cores 1
+      "
+    depends_on:
+      - spark-master
+
+  # ============ PRODUCER (Click Events Generator) ============
+  producer:
+    build: 
+      context: ./producer
+      dockerfile: Dockerfile
+    container_name: G12-rec-producer
+    networks:
+      - rec-network
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=user_events
+      - EVENTS_PER_SECOND=10
+      - NUM_USERS=100
+      - NUM_PRODUCTS=500
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+
+
+  # ============ CONSUMER (Real-time Recommendations Display) ============
+  consumer:
+    build:
+      context: ./consumer
+      dockerfile: Dockerfile
+    container_name: G12-rec-consumer
+    networks:
+      - rec-network
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=recommendations
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "5000:5000"  # Web dashboard
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ============ REDIS MODEL LOADER ============
+  model-loader:
+    build:
+      context: ./model-loader
+      dockerfile: Dockerfile
+    container_name: G12-rec-model-loader
+    networks:
+      - rec-network
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: "no"  # Chạy 1 lần để load model
+
+networks:
+  rec-network:
+    driver: bridge
+    name: recommendation-network
+
+volumes:
+  kafka_data:
+    driver: local
+  redis_data:
+    driver: local
+  zk_data:
+    driver: local
